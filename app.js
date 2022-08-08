@@ -1,5 +1,6 @@
 const passportLocalMongoose = require("passport-local-mongoose"),
 GoogleStrategy = require("passport-google-oauth20").Strategy,
+FacebookStrategy = require("passport-facebook").Strategy,
 findOrCreate = require("mongoose-findorcreate"),
 session = require("express-session"),
 bodyParser = require("body-parser"),
@@ -18,22 +19,21 @@ app.use(express.static("public"));
 app.use(bodyParser.urlencoded({extended: true}));
 
 app.use(session({
-    secret: process.env.SECRET,
+    secret: process.env.SECRET_KEY,
     resave: false,
     saveUninitialized: false
 }));
-
 
 app.use(passport.initialize());
 app.use(passport.session());
 
 mongoose.connect(process.env.MONGO_URI, {useNewUrlParser: true, useUnifiedTopology: true});
-mongoose.set("useCreateIndex", true);
 
 const userSchema = new mongoose.Schema ({
     email: String,
     password: String,
     googleId: String,
+    facebookId: String,
     secret: String
 });
 
@@ -61,12 +61,22 @@ passport.use(new GoogleStrategy({
     userProfileURL: process.env.USERPROFILEURL
 },
 function(accessToken, refreshToken, profile, cb) {
-    // console.log(profile);
-    
     User.findOrCreate({ googleId: profile.id }, (err, user) => {
         return cb(err, user);
     });
 }
+));
+
+passport.use(new FacebookStrategy({
+    clientID: process.env.CLIENT_ID_FB,
+    clientSecret: process.env.CLIENT_SECRET_FB,
+    callbackURL: process.env.CALLBACKURL_FB
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    User.findOrCreate({ facebookId: profile.id }, (err, user) => {
+      return cb(err, user);
+    });
+  }
 ));
 
 app.get("/", (req, res) => {
@@ -80,10 +90,18 @@ app.get("/auth/google",
 app.get("/auth/google/secrets",
 passport.authenticate('google', { failureRedirect: "/login" }),
 (req, res) => {
-
-    // Successful authentication, redirect to secrets.
     res.redirect("/secrets");
 });
+
+app.get('/auth/facebook',
+  passport.authenticate('facebook'));
+
+app.get("/auth/facebook/secrets",
+  passport.authenticate("facebook", { failureRedirect: "/login" }),
+  (req, res) => {
+    res.redirect("/secrets");
+  });
+
 
 app.get("/secrets", (req, res) =>{
     User.find({"secret": {$ne: null}}, (err, foundUsers) => {
@@ -98,8 +116,14 @@ app.get("/secrets", (req, res) =>{
 });
 
 app.get("/logout", (req, res) => {
-    req.logout();
-    res.redirect("/");
+    req.logout((err) => {
+        if (err) { 
+            console.log(err);
+        } else{
+            res.redirect("/");
+        }
+    });
+    
 });
 
 app.route("/login")
