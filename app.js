@@ -12,7 +12,6 @@ ejs = require("ejs"),
 app = express();
 dotenv.config();
 
-
 app.set("view engine", "ejs");
 
 app.use(express.static("public"));
